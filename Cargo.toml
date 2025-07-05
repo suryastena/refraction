@@ -8,3 +8,5 @@ include = ["LICENSE", "Cargo.toml", "README.md", "src/*.rs"]
 [dependencies]
 eframe = "0.31"
 egui = "0.31.1"
+log = { version = "0.4", features = ["std"] }
+env_logger = "0.11.8"
