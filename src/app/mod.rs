@@ -104,10 +104,13 @@ impl eframe::App for RefractionApp {
                 canvas.draw_axes();
 
                 canvas.draw_filled_circle(Pos2::new(0.0, 0.0), 0.25, Color32::from_rgb(255, 175, 0));
+
+                canvas.draw_function(f32::sin, &Color32::from_rgb(255, 0, 0));
+                canvas.draw_function(f32::cos, &Color32::from_rgb(0, 0, 255));
             });
 
         self.frame += 1;
 
-        //ctx.request_repaint();
+        ctx.request_repaint();
     }
 }

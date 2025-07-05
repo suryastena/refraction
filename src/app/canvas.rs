@@ -101,4 +101,26 @@ impl<'a> Canvas<'a> {
             Stroke::new(2.0, Color32::from_rgb(20, 20, 20))
         );
     }
+
+    pub fn draw_points(&self, points: Vec<Pos2>, colour: &Color32) {
+        if points.len() < 2 {
+            return;
+        }
+        let screen_points = points.iter().map(
+            |x| self.world_to_screen_pos(*x)
+        ).collect::<Vec<Pos2>>();
+        self.ui.painter().line(screen_points, Stroke::new(2.0, *colour));
+    }
+
+    pub fn draw_function(&self, f: fn(f32) -> f32, colour: &Color32) {
+        const STEPS: usize = 100;
+        let step = self.range.width() / (STEPS as f32);
+        let mut points: Vec<Pos2> = Vec::with_capacity(STEPS);
+        let mut x = self.range.min.x;
+        for _ in 0..STEPS {
+            points.push(Pos2::new(x, f(x)));
+            x += step;
+        }
+        self.draw_points(points, colour);
+    }
 }
