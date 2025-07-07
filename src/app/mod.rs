@@ -9,14 +9,18 @@ use simulation::Simulation;
 use egui::{Color32, Pos2, Rect, Style};
 use std::time::SystemTime;
 
+const MONITOR_REFRESH_RATE: u32 = 60;
+const SIMULATION_FPS: u32 = if MONITOR_REFRESH_RATE < 60 {MONITOR_REFRESH_RATE} else {60};
+
 pub struct RefractionApp {
     simulation: Simulation,
     paused: bool,
     frame: u32,
     speed: f32,
     zoom: f32,
-    last_60_frames_start: SystemTime,
-    last_60_frames_time_micros: f32,
+    frame_skip: u32,
+    last_n_frames_start: SystemTime,
+    last_n_frames_time_micros: f32,
 }
 
 impl RefractionApp {
@@ -28,8 +32,9 @@ impl RefractionApp {
             frame: 0,
             speed: 1.0,
             zoom: 1.0,
-            last_60_frames_start: SystemTime::now(),
-            last_60_frames_time_micros: 1e6,
+            frame_skip: SIMULATION_FPS / 5,
+            last_n_frames_start: SystemTime::now(),
+            last_n_frames_time_micros: 1e6,
         }
     }
 }
@@ -39,51 +44,81 @@ impl eframe::App for RefractionApp {
 
     /// Called each time the UI needs repainting
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.frame % 60 == 59 {
-            self.last_60_frames_time_micros =
-                self.last_60_frames_start.elapsed().unwrap().as_micros() as f32;
-            self.last_60_frames_start = SystemTime::now();
+        if self.frame % SIMULATION_FPS == SIMULATION_FPS-1 {
+            self.last_n_frames_time_micros =
+                self.last_n_frames_start.elapsed().unwrap().as_micros() as f32;
+            self.last_n_frames_start = SystemTime::now();
         }
 
-        if !self.paused {
-            self.simulation.update(self.speed);
+        if !self.paused && (self.frame % MONITOR_REFRESH_RATE/SIMULATION_FPS == 0) {
+            if self.simulation.update(self.speed) {
+                // sim complete, reset
+                self.paused = true;
+                self.simulation = Simulation::new();
+                self.frame = 0;
+            }
+            self.frame += 1;
         }
 
         // draws simulation controls at the bottom of the window
         let controls = egui::TopBottomPanel::bottom("controls");
         let r = controls.show(ctx, |ui| {
-
             ui.horizontal(|ui| {
-                if ui.button("▶").clicked() {
+                if ui
+                    .add_enabled(self.paused, egui::Button::new("▶"))
+                    .on_hover_text("Play simulation")
+                    .clicked()
+                {
                     self.paused = false;
                 }
-                if ui.button("⏸").clicked() {
+                if ui
+                    .add_enabled(!self.paused, egui::Button::new("⏸"))
+                    .on_hover_text("Pause simulation")
+                    .clicked()
+                {
                     self.paused = true;
                 }
-                if ui.button("⏭").clicked() {
-                    if self.paused {                    
-                        self.simulation.update(self.speed);
-                    }
-                }
-                if ui.button("⟲").clicked() {
+                if ui
+                    .add_enabled(self.simulation.time() > 0.0, egui::Button::new("⟲"))
+                    .on_hover_text("Restart simulation")
+                    .clicked()
+                {
                     self.paused = true;
                     self.simulation = Simulation::new();
                     self.frame = 0;
                 }
+                if ui
+                    .add_enabled(self.paused, egui::Button::new("⏭"))
+                    .on_hover_text("Advance simulation by one step")
+                    .clicked()
+                {
+                    if self.paused {
+                        for _ in 0..self.frame_skip {
+                            self.simulation.update(self.speed);
+                        }
+                    }
+                }
+                ui.add(egui::DragValue::new(&mut self.frame_skip))
+                    .on_hover_text("Number of frames to advance per step");
                 ui.separator();
-                ui.label("Speed");
-                ui.add(egui::Slider::new(&mut self.speed, 0.1..=10.0));
-                if ui.button("↺").clicked() {
+                ui.label("Speed").on_hover_text(
+                    "Warning: changing speed during a simulation run is not stable!",
+                );
+                ui.add(egui::Slider::new(&mut self.speed, 0.1..=10.0))
+                    .on_hover_text(
+                        "Warning: changing speed during a simulation run is not stable!",
+                    );
+                if ui.button("↺").on_hover_text("Reset").clicked() {
                     self.speed = 1.0;
                 }
                 ui.separator();
                 ui.label("Zoom");
-                ui.add(egui::Slider::new(&mut self.zoom, 0.1..=10.0));    
-                if ui.button("↺").clicked() {
+                ui.add(egui::Slider::new(&mut self.zoom, 0.1..=10.0));
+                if ui.button("↺").on_hover_text("Reset").clicked() {
                     self.zoom = 1.0;
-                }            
-                ui.separator();  
-                ui.label(format!("{0:.0} FPS", 6e7 / self.last_60_frames_time_micros));
+                }
+                ui.separator();
+                ui.label(format!("{0:.0} FPS", 6e7 / self.last_n_frames_time_micros));
             });
         });
 
@@ -103,13 +138,33 @@ impl eframe::App for RefractionApp {
                 canvas.draw_grid_lines();
                 canvas.draw_axes();
 
-                canvas.draw_filled_circle(Pos2::new(0.0, 0.0), 0.25, Color32::from_rgb(255, 175, 0));
+                for electron in self.simulation.electrons() {
+                    canvas.draw_filled_circle(
+                        electron.position(),
+                        0.25,
+                        Color32::from_rgb(255, 175, 0),
+                    );
+                    canvas.draw_points(
+                        self.simulation.x_intervals(),
+                        electron.field(),
+                        &Color32::from_rgb(20, 100, 255),
+                    );
+                }
 
-                canvas.draw_function(f32::sin, &Color32::from_rgb(255, 0, 0));
-                canvas.draw_function(f32::cos, &Color32::from_rgb(0, 0, 255));
+                canvas.draw_points(
+                    self.simulation.x_intervals(),
+                    self.simulation.applied_field(),
+                    &Color32::from_rgb(255, 50, 50),
+                );
+                canvas.draw_points(
+                    self.simulation.x_intervals(),
+                    self.simulation.resultant_field(),
+                    &Color32::from_rgb(180, 20, 180),
+                );
+
+                //canvas.draw_function(f32::sin, &Color32::from_rgb(255, 0, 0));
+                //canvas.draw_function(f32::cos, &Color32::from_rgb(0, 0, 255));
             });
-
-        self.frame += 1;
 
         ctx.request_repaint();
     }
