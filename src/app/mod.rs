@@ -10,13 +10,16 @@ use egui::{Color32, Pos2, Rect, Style};
 use std::time::SystemTime;
 
 const MONITOR_REFRESH_RATE: u32 = 60;
-const SIMULATION_FPS: u32 = if MONITOR_REFRESH_RATE < 60 {MONITOR_REFRESH_RATE} else {60};
+const SIMULATION_FPS: u32 = if MONITOR_REFRESH_RATE < 60 {
+    MONITOR_REFRESH_RATE
+} else {
+    60
+};
 
 pub struct RefractionApp {
     simulation: Simulation,
     paused: bool,
     frame: u32,
-    speed: f32,
     zoom: f32,
     frame_skip: u32,
     last_n_frames_start: SystemTime,
@@ -30,7 +33,6 @@ impl RefractionApp {
             simulation: Simulation::new(),
             paused: true,
             frame: 0,
-            speed: 1.0,
             zoom: 1.0,
             frame_skip: SIMULATION_FPS / 5,
             last_n_frames_start: SystemTime::now(),
@@ -44,14 +46,14 @@ impl eframe::App for RefractionApp {
 
     /// Called each time the UI needs repainting
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.frame % SIMULATION_FPS == SIMULATION_FPS-1 {
+        if self.frame % SIMULATION_FPS == SIMULATION_FPS - 1 {
             self.last_n_frames_time_micros =
                 self.last_n_frames_start.elapsed().unwrap().as_micros() as f32;
             self.last_n_frames_start = SystemTime::now();
         }
 
-        if !self.paused && (self.frame % MONITOR_REFRESH_RATE/SIMULATION_FPS == 0) {
-            if self.simulation.update(self.speed) {
+        if !self.paused && (self.frame % MONITOR_REFRESH_RATE / SIMULATION_FPS == 0) {
+            if self.simulation.update() {
                 // sim complete, reset
                 self.paused = true;
                 self.simulation = Simulation::new();
@@ -94,7 +96,7 @@ impl eframe::App for RefractionApp {
                 {
                     if self.paused {
                         for _ in 0..self.frame_skip {
-                            self.simulation.update(self.speed);
+                            self.simulation.update();
                         }
                     }
                 }
@@ -104,12 +106,12 @@ impl eframe::App for RefractionApp {
                 ui.label("Speed").on_hover_text(
                     "Warning: changing speed during a simulation run is not stable!",
                 );
-                ui.add(egui::Slider::new(&mut self.speed, 0.1..=10.0))
+                ui.add(egui::Slider::new(&mut self.simulation.speed, 0.1..=10.0))
                     .on_hover_text(
                         "Warning: changing speed during a simulation run is not stable!",
                     );
                 if ui.button("↺").on_hover_text("Reset").clicked() {
-                    self.speed = 1.0;
+                    self.simulation.speed = 1.0;
                 }
                 ui.separator();
                 ui.label("Zoom");
@@ -160,6 +162,11 @@ impl eframe::App for RefractionApp {
                     self.simulation.x_intervals(),
                     self.simulation.resultant_field(),
                     &Color32::from_rgb(180, 20, 180),
+                );
+                canvas.draw_points(
+                    self.simulation.x_intervals(),
+                    self.simulation.electrons()[0].ret_v(),
+                    &Color32::from_rgb(0, 255, 0),
                 );
 
                 //canvas.draw_function(f32::sin, &Color32::from_rgb(255, 0, 0));
