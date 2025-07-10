@@ -4,44 +4,45 @@ use egui::{Pos2, Vec2};
 use ndarray::{Array, Array1, s};
 
 pub const WORLD_SIZE: f32 = 5.0;
-pub const DIVISIONS: usize = 200; // should be odd. not odd odd, just not even.
+pub const DIVISIONS: usize = 200;
 pub const ELECTRON_MASS: f32 = 1.0;
 pub const C: f32 = 1.0;
 pub const EM_STRENGTH: f32 = 20.0;
 pub const SPRING_CONSTANT: f32 = 2.0;
 pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
 
-fn field_at(field: &Array1<f32>, x: f32, default_if_oob: Option<(f32, f32)>, print: bool) -> f32 {
+fn bounded_field_at(
+    field: &Array1<f32>,
+    x: f32,
+    lower_bound: (f32, f32),
+    upper_bound: (f32, f32),
+) -> f32 {
     const STEP: f32 = 2.0 * WORLD_SIZE / (DIVISIONS as f32);
-    let (default_lower, default_upper) = default_if_oob.unwrap_or((0.0, 0.0));
-    let idx = (x + WORLD_SIZE) / STEP;
+    let space_to_index = |pos: f32| (pos + WORLD_SIZE) / STEP;
+
+    let idx = space_to_index(x);
+    let lower_bound_idx = space_to_index(lower_bound.0);
+    let upper_bound_idx = space_to_index(upper_bound.0);
+
+    let bounded_field = |index: f32| -> &f32 {
+        if index <= lower_bound_idx {
+            return &lower_bound.1;
+        }
+        if index >= upper_bound_idx {
+            return &upper_bound.1;
+        }
+        return field.get(index as usize).unwrap_or(&0.0);
+    };
+
     let (lower_idx, upper_idx) = (idx.floor(), idx.ceil());
-    let lower = field.get(lower_idx as usize).unwrap_or_else(|| {
-        if lower_idx <= 0.0 {
-            &default_lower
-        } else {
-            &default_upper
-        }
-    });
-    let upper = field.get(upper_idx as usize).unwrap_or_else(|| {
-        if upper_idx <= 0.0 {
-            &default_lower
-        } else {
-            &default_upper
-        }
-    });
-    if print {
-    log::info!(
-        "    idx {},  lower_idx {}, upper_idx {}, def_low {}, def_upp {}, lower {}, upper {}",
-        idx,
-        lower_idx,
-        upper_idx,
-        default_lower,
-        default_upper,
-        lower,
-        upper
-    );}
-    return (idx - lower) * lower + (1.0 - idx + lower) * upper;
+    let lower = bounded_field(lower_idx);
+    let upper = bounded_field(upper_idx);
+    
+    return (idx - lower_idx) * lower + (1.0 - idx + lower_idx) * upper;
+}
+
+fn field_at(field: &Array1<f32>, x: f32) -> f32 {
+    bounded_field_at(field, x, (-WORLD_SIZE, 0.0), (WORLD_SIZE, 0.0))
 }
 
 pub struct Electron {
@@ -81,25 +82,35 @@ impl Electron {
 
         for i in 0..DIVISIONS {
             let x = self.x_intervals[i];
-            let past_x = x + C * time_step * (self.position.x - x).signum();
-            let oob = if x < self.position.x {
-                (0.0, self.velocity)
-            } else {
-                (self.velocity, 0.0)
-            };
-            let ret_v = field_at(&self.retarded_velocity, past_x, Some(oob), true);
-            /*
-            log::info!(
-                "x {}, past_x {}, v {}, ret_v {}",
-                x,
-                past_x,
-                self.retarded_velocity[i],
-                ret_v
-            );
-            */
+            if x > self.position.x {
+                break;
+            }
+            log::info!("{}", i);
+            let past_x = x + C * time_step;
+            let ret_v = bounded_field_at(
+                    &self.retarded_velocity,
+                    past_x,
+                    (-WORLD_SIZE, 0.0),
+                    (self.position.x, self.velocity),
+                );
             self.retarded_velocity[i] = ret_v;
         }
-        log::info!("==========================================================================");
+        for i in (0..DIVISIONS).rev() {
+            let x = self.x_intervals[i];
+            if x < self.position.x {
+                break;
+            }
+            log::info!("{}", i);
+            let past_x = x - C * time_step;
+            let ret_v = bounded_field_at(
+                    &self.retarded_velocity,
+                    past_x,
+                    (self.position.x, self.velocity),
+                    (WORLD_SIZE, 0.0),
+                );
+            self.retarded_velocity[i] = ret_v;
+        }
+        log::info!("========================");
 
         let force = EM_STRENGTH * applied_field_strength - SPRING_CONSTANT * self.position.y;
         self.velocity += time_step * (force / ELECTRON_MASS);
@@ -155,7 +166,7 @@ impl Simulation {
 
         let time_step = self.time_step();
         for e in &mut self.electrons {
-            e.update_position(field_at(&self.applied_field, e.position.x, None, false), time_step);
+            e.update_position(field_at(&self.applied_field, e.position.x), time_step);
             e.update_induced_field();
             self.resultant_field += &e.field;
         }
