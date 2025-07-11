@@ -148,7 +148,7 @@ impl eframe::App for RefractionApp {
                     );
                     canvas.draw_points(
                         self.simulation.x_intervals(),
-                        electron.ret_v(),
+                        electron.retarded_velocity(),
                         &Color32::from_rgb(0, 255, 0),
                     );
                     /*
