@@ -3,7 +3,7 @@
 
 use egui::{Color32, Pos2, Rect, Stroke, Ui, Vec2, epaint::CircleShape};
 
-const SUPRESS_ZERO_POINTS: bool = false;
+const SUPRESS_ZERO_POINTS: bool = true;
 
 pub struct Canvas<'a> {
     ui: &'a Ui,

@@ -148,16 +148,9 @@ impl eframe::App for RefractionApp {
                     );
                     canvas.draw_points(
                         self.simulation.x_intervals(),
-                        electron.ret_v(),
-                        &Color32::from_rgb(0, 255, 0),
-                    );
-                    /*
-                    canvas.draw_points(
-                        self.simulation.x_intervals(),
                         electron.field(),
                         &Color32::from_rgb(20, 100, 255),
                     );
-                    */
                 }
 
                 canvas.draw_points(
@@ -168,13 +161,12 @@ impl eframe::App for RefractionApp {
 
                 let pos = Pos2::new(self.simulation.photon, -2.0);
                 canvas.draw_filled_circle(&pos, 0.15, Color32::from_rgb(255, 200, 200));
-                /*
+                
                 canvas.draw_points(
                     self.simulation.x_intervals(),
                     self.simulation.resultant_field(),
                     &Color32::from_rgb(180, 20, 180),
                 );
-                */
 
                 //canvas.draw_function(f32::sin, &Color32::from_rgb(255, 0, 0));
                 //canvas.draw_function(f32::cos, &Color32::from_rgb(0, 0, 255));

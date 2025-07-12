@@ -1,11 +1,10 @@
 //! Contains all simulation logic
-#![allow(dead_code)]
 
 mod field;
 
 use egui::{Pos2, Vec2};
 
-use crate::app::simulation::field::{Field, SimpleField};
+use crate::app::simulation::field::Field;
 
 pub const WORLD_SIZE: f32 = 5.0;
 pub const DIVISIONS: usize = 501;
@@ -23,9 +22,8 @@ fn wave_packet(x: f32, t: f32) -> f32 {
 pub struct Electron {
     position: Pos2,
     velocity: f32,
-    field: SimpleField,
+    field: Field,
     velocity_history: Vec<(f32, f32)>,
-    ret_v: Vec<f32>,
 }
 
 impl Electron {
@@ -33,9 +31,8 @@ impl Electron {
         Electron {
             position,
             velocity: 0.0,
-            field: SimpleField::new(),
+            field: Field::new(),
             velocity_history: Vec::new(),
-            ret_v: vec![0.0; DIVISIONS],
         }
     }
 
@@ -48,7 +45,7 @@ impl Electron {
                 continue;
             }*/
             let vy = self.retarded_velocity(x, t);
-            let v_perp_y = vy - vy * r.y * r.y / (r.x * r.x + r.y * r.y).powf(1.0);
+            let v_perp_y = vy - vy * r.y * r.y / (r.x * r.x + r.y * r.y).powf(1.5);
             self.field[i] = -v_perp_y;
         }
     }
@@ -58,12 +55,6 @@ impl Electron {
         self.velocity += delta_t * (force / ELECTRON_MASS);
         self.position.y += delta_t * (self.velocity);
         self.velocity_history.push((t, self.velocity));
-
-        self.ret_v.clear();
-        for x in self.field.intervals() {
-            let ret_v = self.retarded_velocity(*x, t);
-            self.ret_v.push(ret_v);
-        }
     }
 
     pub fn position(&self) -> &Pos2 {
@@ -97,10 +88,6 @@ impl Electron {
         }
         return past_v;
     }
-
-    pub fn ret_v(&self) -> &[f32] {
-        &self.ret_v
-    }
 }
 
 /*
@@ -111,8 +98,8 @@ pub struct Simulation {
     pub speed: f32,
     t: f32,
     pub photon: f32,
-    applied_field: SimpleField,
-    resultant_field: SimpleField,
+    applied_field: Field,
+    resultant_field: Field,
     electrons: Vec<Electron>,
 }
 
@@ -122,8 +109,8 @@ impl Simulation {
             t: 0.0,
             speed: 1.0,
             photon: WORLD_SIZE,
-            applied_field: SimpleField::new(),
-            resultant_field: SimpleField::new(),
+            applied_field: Field::new(),
+            resultant_field: Field::new(),
             electrons: vec![Electron::new(Pos2::new(0.0, 0.0))],
         }
     }
@@ -131,8 +118,8 @@ impl Simulation {
     pub fn reset(&mut self) {
         self.t = 0.0;
         self.photon = WORLD_SIZE;
-        self.applied_field = SimpleField::new();
-        self.resultant_field = SimpleField::new();
+        self.applied_field = Field::new();
+        self.resultant_field = Field::new();
         self.electrons.clear();
         self.electrons.push(Electron::new(Pos2::new(0.0, 0.0)));
     }
