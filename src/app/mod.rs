@@ -56,7 +56,7 @@ impl eframe::App for RefractionApp {
             if self.simulation.update() {
                 // sim complete, reset
                 self.paused = true;
-                self.simulation = Simulation::new();
+                self.simulation.reset();
                 self.frame = 0;
             }
             self.frame += 1;
@@ -86,7 +86,7 @@ impl eframe::App for RefractionApp {
                     .clicked()
                 {
                     self.paused = true;
-                    self.simulation = Simulation::new();
+                    self.simulation.reset();
                     self.frame = 0;
                 }
                 if ui
@@ -165,6 +165,9 @@ impl eframe::App for RefractionApp {
                     self.simulation.applied_field(),
                     &Color32::from_rgb(255, 50, 50),
                 );
+
+                let pos = Pos2::new(self.simulation.photon, -2.0);
+                canvas.draw_filled_circle(&pos, 0.15, Color32::from_rgb(255, 200, 200));
                 /*
                 canvas.draw_points(
                     self.simulation.x_intervals(),

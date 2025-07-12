@@ -5,20 +5,38 @@ use egui::{Pos2, Vec2};
 use ndarray::{Array, Array1, Array2, Ix1, Ix2, s};
 
 pub const WORLD_SIZE: f32 = 5.0;
-pub const DIVISIONS: usize = 200;
+pub const DIVISIONS: usize = 501;
 pub const ELECTRON_MASS: f32 = 1.0;
 pub const C: f32 = 1.0;
 pub const EM_STRENGTH: f32 = 20.0;
 pub const SPRING_CONSTANT: f32 = 2.0;
 pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
+const STEP: f32 = 2.0 * WORLD_SIZE / ((DIVISIONS - 1) as f32);
 
-fn index_of(x: f32) -> usize {
-    const STEP: f32 = 2.0 * WORLD_SIZE / (DIVISIONS as f32);
-    ((x + WORLD_SIZE) / STEP).round() as usize
+fn index_of_f32(x: f32) -> f32 {
+    (x + WORLD_SIZE) / STEP
 }
 
-fn field_at(field: &Array1<f32>, x: f32) -> f32 {
-    *field.get(index_of(x)).unwrap_or(&0.0)
+fn index_of(x: f32) -> usize {
+    index_of_f32(x).round() as usize
+}
+
+fn field_at(field: &[f32], x: f32) -> f32 {
+    let get_value = |i: f32| -> f32 { *field.get(i as usize).unwrap_or(&0.0) };
+    let idx = index_of_f32(x);
+    //return *field.get(idx.round() as usize).unwrap_or(&0.0);
+    let (lower_idx, upper_idx) = (idx.floor(), idx.ceil());
+    let (lower, upper) = (get_value(lower_idx), get_value(upper_idx));
+    lower * (1.0 - idx + lower_idx) + upper * (idx - lower_idx)
+}
+
+fn set_field_at(field: &mut [f32], x: f32, val: f32) {
+    match field.get_mut(index_of(x)) {
+        Some(v) => {
+            *v = val;
+        }
+        None => {}
+    }
 }
 
 pub struct Electron {
@@ -60,12 +78,27 @@ impl Electron {
         self.velocity += time_step * (force / ELECTRON_MASS);
         self.position.y += time_step * (self.velocity);
 
-        // propagate stored seen velocity at each point in space at the speed of light
-        for _i in 0..DIVISIONS {}
-
         self.frame_in_flight = (self.frame_in_flight + 1) % 2;
+
+        // propagate stored seen velocity at each point in space at the speed of light
+        for i in 0..DIVISIONS {
+            let x = self.x_intervals[i];
+            let past_direction = (self.position.x - x).signum();
+            let mut past_x = x + C * time_step * past_direction;
+            past_x = match past_direction < 0.0 {
+                true => past_x.max(self.position.x),
+                false => past_x.min(self.position.x),
+            };
+            let propagated_field = field_at(self.retarded_velocity_past(), past_x);
+            self.retarded_velocity_mut()[i] = propagated_field;
+        }
+
         let x_pos = self.position.x;
-        self.retarded_velocity_mut()[index_of(x_pos)] = self.velocity;
+        let v = self.velocity;
+        match self.retarded_velocity_mut().get_mut(index_of(x_pos)) {
+            Some(ret_v) => *ret_v = v,
+            None => (),
+        };
     }
 
     pub fn position(&self) -> &Pos2 {
@@ -101,6 +134,7 @@ impl Electron {
 pub struct Simulation {
     pub speed: f32,
     t: f32,
+    pub photon: f32,
     x_intervals: Array1<f32>,
     applied_field: Array1<f32>,
     resultant_field: Array1<f32>,
@@ -117,11 +151,21 @@ impl Simulation {
         Simulation {
             t: 0.0,
             speed: 1.0,
+            photon: WORLD_SIZE,
             x_intervals: Array::linspace(-WORLD_SIZE, WORLD_SIZE, DIVISIONS),
             applied_field: Array::zeros(Ix1(DIVISIONS)),
             resultant_field: Array::zeros(Ix1(DIVISIONS)),
             electrons: vec![Electron::new(Pos2::new(0.0, 0.0))],
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.t = 0.0;
+        self.photon = WORLD_SIZE;
+        self.x_intervals = Array::linspace(-WORLD_SIZE, WORLD_SIZE, DIVISIONS);
+        self.applied_field = Array::zeros(Ix1(DIVISIONS));
+        self.resultant_field = Array::zeros(Ix1(DIVISIONS));
+        self.electrons = vec![Electron::new(Pos2::new(0.0, 0.0))];
     }
 
     pub fn size(&self) -> f32 {
@@ -133,13 +177,16 @@ impl Simulation {
         self.resultant_field = Array::zeros(Ix1(DIVISIONS)) + &self.applied_field;
 
         let time_step = self.time_step();
-        for e in &mut self.electrons {
-            e.update_position(field_at(&self.applied_field, e.position.x), time_step);
+        for i in 0..self.electrons.len() {
+            let e_y = field_at(self.applied_field(), self.electrons[i].position.x);
+            let e = self.electrons.get_mut(i).unwrap();
+            e.update_position(e_y, time_step);
             e.update_induced_field();
             self.resultant_field += &e.field;
         }
 
-        self.t += self.time_step();
+        self.photon -= C * time_step;
+        self.t += time_step;
 
         return self.t > (2.0 * WORLD_SIZE / C);
     }
