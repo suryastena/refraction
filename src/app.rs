@@ -34,7 +34,7 @@ impl RefractionApp {
             paused: true,
             frame: 0,
             zoom: 1.0,
-            frame_skip: SIMULATION_FPS / 5,
+            frame_skip: 1,//SIMULATION_FPS / 5,
             last_n_frames_start: SystemTime::now(),
             last_n_frames_time_micros: 1e6,
         }
@@ -148,7 +148,7 @@ impl eframe::App for RefractionApp {
                     );
                     canvas.draw_points(
                         self.simulation.x_intervals(),
-                        electron.retarded_velocity(),
+                        electron.ret_v(),
                         &Color32::from_rgb(0, 255, 0),
                     );
                     /*

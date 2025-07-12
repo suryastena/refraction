@@ -1,4 +1,4 @@
-use ndarray::{Array, Array1, Array2, Ix1, Ix2, s};
+use ndarray::{Array, Array1, Ix1, s};
 use std::ops::{Index, IndexMut};
 
 use crate::app::simulation::{DIVISIONS, WORLD_SIZE};
@@ -26,7 +26,7 @@ pub trait Field: Index<usize> {
     }
 }
 
-trait FieldMut : Field {
+trait FieldMut: Field {
     fn values_mut(&mut self) -> &mut [f32];
 
     fn set_value_at(&mut self, x: f32, value: f32) {
@@ -95,73 +95,5 @@ impl Field for SimpleField {
 impl FieldMut for SimpleField {
     fn values_mut(&mut self) -> &mut [f32] {
         self.field.slice_mut(s![..]).into_slice().unwrap()
-    }}
-
-/*
-=================================================================================
-*/
-
-pub struct VelocityField {
-    retarded_velocity: Array2<f32>,
-    positions: Array2<f32>,
-    frame_in_flight: usize,
-}
-
-impl VelocityField {
-    pub fn new() -> Self {
-        VelocityField {
-            retarded_velocity: Array2::zeros(Ix2(2, DIVISIONS)),
-            positions: Array2::zeros(Ix2(2, DIVISIONS)),
-            frame_in_flight: 0,
-        }
-    }
-
-    pub fn update(&mut self, dt: f32, v0: f32) {
-        self.frame_in_flight = (self.frame_in_flight + 1) % 2;
-
-        /*
-        // propagate stored seen velocity at each point in space at the speed of light
-        for i in 0..DIVISIONS {
-            let x = self.field.position_at(i);
-            let past_direction = (self.position.x - x).signum();
-            let mut past_x = x + C * time_step * past_direction;
-            past_x = match past_direction < 0.0 {
-                true => past_x.max(self.position.x),
-                false => past_x.min(self.position.x),
-            };
-            let propagated_field = field_at(self.retarded_velocity_past(), past_x);
-            self.retarded_velocity_mut()[i] = propagated_field;
-        }
-
-        let x_pos = self.position.x;
-        let v = self.velocity;
-        match self.retarded_velocity_mut().get_mut(index_of(x_pos)) {
-            Some(ret_v) => *ret_v = v,
-            None => (),
-        };
-        */
     }
 }
-
-impl Field for VelocityField {
-    fn values(&self) -> &[f32] {
-        self.retarded_velocity.row(self.frame_in_flight).to_slice().unwrap()
-    }
-}
-impl Index<usize> for VelocityField {
-    type Output = f32;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.values()[index]
-    }
-}
-//
-
-/*
-impl Index<usize> for VelocityField {
-    type Output = f32;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.values()[index]
-    }
-}
-*/
