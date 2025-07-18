@@ -6,12 +6,11 @@ use egui::{Pos2, Vec2};
 
 use crate::app::simulation::field::Field;
 
-pub const WORLD_SIZE: f32 = 5.0;
+pub const WORLD_SIZE: f32 = 4.0;
 pub const DIVISIONS: usize = 501;
-pub const ELECTRON_MASS: f32 = 1.0;
+pub const ELECTRON_MASS: f32 = 0.2;
 pub const C: f32 = 1.0;
-pub const EM_STRENGTH: f32 = 20.0;
-pub const SPRING_CONSTANT: f32 = 2.0;
+pub const SPRING_CONSTANT: f32 = 0.0;
 pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
 
 fn wave_packet(x: f32, t: f32) -> f32 {
@@ -40,18 +39,18 @@ impl Electron {
         for i in 0..DIVISIONS {
             let x = self.field.position_at(i);
             let r = self.position - Vec2::new(x, 0.0);
-            /*if (r.x * r.x + r.y * r.y) < 0.0001 {
+            if (r.x * r.x + r.y * r.y) < 0.001 {
                 self.field[i] = 0.0;
                 continue;
-            }*/
+            }
             let vy = self.retarded_velocity(x, t);
-            let v_perp_y = vy - vy * r.y * r.y / (r.x * r.x + r.y * r.y).powf(1.5);
+            let v_perp_y = vy - vy * r.y * r.y / (r.x * r.x + r.y * r.y).powf(1.0);
             self.field[i] = -v_perp_y;
         }
     }
 
     fn update_position(&mut self, applied_field_strength: f32, t: f32, delta_t: f32) {
-        let force = EM_STRENGTH * applied_field_strength - SPRING_CONSTANT * self.position.y;
+        let force = applied_field_strength - SPRING_CONSTANT * self.position.y;
         self.velocity += delta_t * (force / ELECTRON_MASS);
         self.position.y += delta_t * (self.velocity);
         self.velocity_history.push((t, self.velocity));
