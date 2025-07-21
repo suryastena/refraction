@@ -1,7 +1,7 @@
 //! Helper struct for drawing objects in world space onto the screen.
-//! This maintains aspect ratio, so `bounding_range` is clipped to fill the screen area.
+//! This maintains aspect ratio, so `visible_world` is clipped to fill the screen area.
 
-use egui::{Color32, Pos2, Rect, Stroke, Ui, Vec2, epaint::CircleShape};
+use egui::{Color32, Pos2, Rangef, Rect, Stroke, Ui, epaint::CircleShape};
 
 const SUPRESS_ZERO_POINTS: bool = true;
 
@@ -13,26 +13,10 @@ pub struct Canvas<'a> {
 }
 
 impl<'a> Canvas<'a> {
-    pub fn from_centre(ui: &'a Ui, screen_extent: Rect, width: f32) -> Self {
-        Self::from_bounding_range(
-            ui,
-            screen_extent,
-            Rect::from_center_size(Pos2::new(0.0, 0.0), Vec2::new(width, f32::MAX)),
-        )
-    }
+    pub fn new(ui: &'a Ui, screen_extent: Rect, visible_x_axis: Rangef) -> Self {
+        let y_span = visible_x_axis.span() / screen_extent.aspect_ratio();
 
-    pub fn from_bounding_range(ui: &'a Ui, screen_extent: Rect, bounding_range: Rect) -> Self {
-        let xscale = if bounding_range.aspect_ratio() < screen_extent.aspect_ratio() {
-            1.0
-        } else {
-            screen_extent.aspect_ratio() / bounding_range.aspect_ratio()
-        };
-        let yscale = if bounding_range.aspect_ratio() > screen_extent.aspect_ratio() {
-            1.0
-        } else {
-            bounding_range.aspect_ratio() / screen_extent.aspect_ratio()
-        };
-        let range = bounding_range.scale_from_center2(Vec2::new(xscale, yscale));
+        let range = Rect::from_x_y_ranges(visible_x_axis, Rangef::new(-y_span / 2.0, y_span / 2.0));
 
         let scale = screen_extent.width() / range.width();
 

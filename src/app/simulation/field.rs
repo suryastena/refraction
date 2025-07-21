@@ -1,25 +1,28 @@
+use egui::Rangef;
 use ndarray::{Array, Array1, Ix1, s};
 use std::ops::{Index, IndexMut};
 
-use crate::app::simulation::{DIVISIONS, WORLD_SIZE};
-
-const STEP: f32 = 2.0 * WORLD_SIZE / ((DIVISIONS - 1) as f32);
+use crate::app::simulation::DIVISIONS;
 
 pub struct Field {
     field: Array1<f32>,
-    x_points: Array1<f32>,
+    extent: Rangef,
+    step: f32,
+    points: Array1<f32>,
 }
 
 impl Field {
-    pub fn new() -> Self {
+    pub fn new(extent: Rangef) -> Self {
         Field {
+            extent,
+            step: 2.0 * extent.span() / ((DIVISIONS - 1) as f32),
             field: Array::zeros(Ix1(DIVISIONS)),
-            x_points: Array::linspace(-WORLD_SIZE, WORLD_SIZE, DIVISIONS),
+            points: Array::linspace(extent.min, extent.max, DIVISIONS),
         }
     }
 
     fn index_of(&self, x: f32) -> f32 {
-        (x + WORLD_SIZE) / STEP
+        (x + self.extent.min) / self.step
     }
 
     pub fn values(&self) -> &[f32] {
@@ -39,14 +42,14 @@ impl Field {
         lower * (1.0 - idx + lower_idx) + upper * (idx - lower_idx)
     }
 
-    pub fn set_from_function(&mut self, f: fn(f32, f32) -> f32, t: f32) {
+    pub fn set_from_function(&mut self, f: impl Fn(f32, f32) -> f32, t: f32) {
         for i in 0..DIVISIONS {
-            self.field[i] = f(self.x_points[i], t);
+            self.field[i] = f(self.points[i], t);
         }
     }
 
     pub fn intervals(&self) -> &[f32] {
-        self.x_points.slice(s![..]).to_slice().unwrap()
+        self.points.slice(s![..]).to_slice().unwrap()
     }
 
     pub fn add(&mut self, rhs: &Field) {
@@ -54,7 +57,7 @@ impl Field {
     }
 
     pub fn position_at(&self, idx: usize) -> f32 {
-        self.x_points[idx]
+        self.points[idx]
     }
 }
 
