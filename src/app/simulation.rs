@@ -4,7 +4,7 @@ mod field;
 
 use egui::{Pos2, Rangef, Vec2};
 
-use crate::app::simulation::field::Field;
+use field::Field;
 
 pub const DIVISIONS: usize = 501;
 pub const C: f32 = 1.0;
@@ -63,6 +63,9 @@ impl Electron {
                 //(n_s - v_s) / (d*d*(1.0 - ns_dot_vs).powi(3)) +
                 Vec2::new(n_s.x*n_s.y, -n_s.x*n_s.x)*e_rva.a / (d*(1.0 - ns_dot_vs).powi(3))
             ).y;
+
+
+
             */
             let x = self.field.position_at(i);
             let e_rva = self.retarded_rva(x, t);

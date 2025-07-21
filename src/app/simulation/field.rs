@@ -13,16 +13,17 @@ pub struct Field {
 
 impl Field {
     pub fn new(extent: Rangef) -> Self {
-        Field {
+        let f = Field {
             extent,
-            step: 2.0 * extent.span() / ((DIVISIONS - 1) as f32),
+            step: extent.span() / ((DIVISIONS - 1) as f32),
             field: Array::zeros(Ix1(DIVISIONS)),
             points: Array::linspace(extent.min, extent.max, DIVISIONS),
-        }
+        };
+        f
     }
 
     fn index_of(&self, x: f32) -> f32 {
-        (x + self.extent.min) / self.step
+        (x - self.extent.min) / self.step
     }
 
     pub fn values(&self) -> &[f32] {
