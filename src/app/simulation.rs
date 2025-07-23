@@ -67,10 +67,18 @@ impl Electron {
 
 
             */
+            // derived from second time-derivative term of Heaviside-Feynman formula
             let x = self.field.position_at(i);
             let e_rva = self.retarded_rva(x, t);
-            let r = Vec2::new(-x, e_rva.y);
-            self.field[i] = -e_rva.a * r.x / r.length_sq();
+            let r = Vec2::new(self.position.x - x, e_rva.y);
+            let mod_r = r.length();
+            let v = e_rva.v;
+            let a = e_rva.a;
+            let r_dot_v = r.y * v;
+            self.field[i] = match r.x.abs() < self.field.size() / (DIVISIONS-1) as f32 {
+                true => 0.0,
+                false => v*r_dot_v / (mod_r*mod_r) - a / mod_r
+            };
         }
     }
 
@@ -179,7 +187,7 @@ impl Simulation {
 
         let time_step = self.time_step();
         for i in 0..self.electrons.len() {
-            let e_y = self.applied_field.value_at(self.electrons[i].position.x);
+            let e_y = self.resultant_field.value_at(self.electrons[i].position.x);
             let e = self.electrons.get_mut(i).unwrap();
             e.mass = self.electron_mass;
             e.spring_constant = self.spring_constant;
@@ -190,7 +198,7 @@ impl Simulation {
 
         self.t += time_step;
 
-        return self.t > (2.0 * self.size.span() / C);
+        return self.t > (1.3 * self.size.span() / C);
     }
 
     fn time_step(&self) -> f32 {

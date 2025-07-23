@@ -43,14 +43,16 @@ impl RefractionApp {
         Self {
             simulation: Simulation::new(size),
             paused: true,
+
             frame: 0,
+            frame_skip: SIMULATION_FPS / 5,
+            last_n_frames_start: SystemTime::now(),
+            last_n_frames_time_micros: 1e6,
+            
             world_centre: size.center(),
             zoom: 1.0,
             zoom_centre: None,
             dragging: None,
-            frame_skip: 1, //SIMULATION_FPS / 5,
-            last_n_frames_start: SystemTime::now(),
-            last_n_frames_time_micros: 1e6,
         }
     }
 }

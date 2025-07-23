@@ -60,6 +60,10 @@ impl Field {
     pub fn position_at(&self, idx: usize) -> f32 {
         self.points[idx]
     }
+
+    pub fn size(&self) -> f32 {
+        self.extent.span()
+    }
 }
 
 impl Index<usize> for Field {

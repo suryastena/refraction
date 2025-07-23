@@ -3,7 +3,7 @@
 
 use egui::{Color32, Pos2, Rangef, Rect, Stroke, Ui, epaint::CircleShape};
 
-const SUPRESS_ZERO_POINTS: bool = true;
+const SUPPRESS_ZERO_POINTS_THRESHOLD: f32 = 0.005;
 
 pub struct Canvas<'a> {
     ui: &'a Ui,
@@ -96,10 +96,8 @@ impl<'a> Canvas<'a> {
         }
         let mut screen_points = Vec::with_capacity(x_points.len());
         for (x, y) in x_points.iter().zip(y_points) {
-            if SUPRESS_ZERO_POINTS {
-                if y.abs() < 0.001 {
-                    continue;
-                }
+            if y.abs() < SUPPRESS_ZERO_POINTS_THRESHOLD {
+                continue;
             }
             screen_points.push(Pos2::new(
                 self.world_to_screen_x(*x),
@@ -110,17 +108,4 @@ impl<'a> Canvas<'a> {
             .painter()
             .line(screen_points, Stroke::new(2.0, *colour));
     }
-    /*
-        pub fn draw_function(&self, f: fn(f32) -> f32, colour: &Color32) {
-            const STEPS: usize = simulation::DIVISIONS as usize;
-            let step = self.range.width() / (STEPS as f32);
-            let mut points: Vec<Pos2> = Vec::with_capacity(STEPS);
-            let mut x = self.range.min.x;
-            for _ in 0..STEPS {
-                points.push(Pos2::new(x, f(x)));
-                x += step;
-            }
-            self.draw_points(points, colour);
-        }
-    */
 }
