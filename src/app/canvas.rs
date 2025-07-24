@@ -1,7 +1,6 @@
 //! Helper struct for drawing objects in world space onto the screen.
-//! This maintains aspect ratio, so `visible_world` is clipped to fill the screen area.
 
-use egui::{Color32, Pos2, Rangef, Rect, Stroke, Ui, epaint::CircleShape};
+use egui::{Color32, Pos2, Rangef, Rect, Stroke, Ui, Vec2, epaint::CircleShape, pos2, vec2};
 
 const SUPPRESS_ZERO_POINTS_THRESHOLD: f32 = 0.005;
 
@@ -9,22 +8,24 @@ pub struct Canvas<'a> {
     ui: &'a Ui,
     screen_extent: Rect,
     range: Rect,
-    scale: f32,
+    scale: Vec2,
 }
 
 impl<'a> Canvas<'a> {
     pub fn new(ui: &'a Ui, screen_extent: Rect, visible_x_axis: Rangef) -> Self {
-        let y_span = visible_x_axis.span() / screen_extent.aspect_ratio();
+        //let y_span = visible_x_axis.span() / screen_extent.aspect_ratio();
+        let y_span = 4.0;
 
         let range = Rect::from_x_y_ranges(visible_x_axis, Rangef::new(-y_span / 2.0, y_span / 2.0));
 
-        let scale = screen_extent.width() / range.width();
+        let x_scale = screen_extent.width() / range.width();
+        let y_scale = screen_extent.height() / range.height();
 
         Canvas {
             ui,
             screen_extent,
             range,
-            scale,
+            scale: vec2(x_scale, y_scale),
         }
     }
 
@@ -33,15 +34,15 @@ impl<'a> Canvas<'a> {
     }
 
     fn world_to_screen_x(&self, x: f32) -> f32 {
-        self.screen_extent.min.x + self.scale * (x - self.range.min.x)
+        self.screen_extent.min.x + self.scale.x * (x - self.range.min.x)
     }
 
     fn world_to_screen_y(&self, y: f32) -> f32 {
-        self.screen_extent.min.y + self.scale * (y - self.range.min.y)
+        self.screen_extent.min.y + self.scale.y * (y - self.range.min.y)
     }
 
     fn world_to_screen_scale(&self) -> f32 {
-        self.scale
+        self.scale.x
     }
 
     pub fn draw_filled_circle(&self, pos: &Pos2, radius: f32, colour: Color32) {
@@ -53,18 +54,18 @@ impl<'a> Canvas<'a> {
     }
 
     pub fn draw_grid_lines(&self) {
-        const MAX_GRIDLINES: f32 = 20.0;
-        let step = (self.range.x_range().span() / MAX_GRIDLINES).round();
-
-        let mut y = step * (self.range.min.y / step).round();
+        let mut y = (2.0 * self.range.min.y).round() / 2.0;
         while y < self.range.max.y {
             self.ui.painter().hline(
                 self.screen_extent.x_range(),
                 self.world_to_screen_y(y),
                 Stroke::new(1.0, Color32::from_rgb(15, 15, 15)),
             );
-            y += step;
+            y += 0.5;
         }
+
+        const MAX_GRIDLINES: f32 = 20.0;
+        let step = (self.range.x_range().span() / MAX_GRIDLINES).round();
         let mut x = step * (self.range.min.x / step).round();
         while x < self.range.max.x {
             self.ui.painter().vline(
@@ -99,10 +100,7 @@ impl<'a> Canvas<'a> {
             if y.abs() < SUPPRESS_ZERO_POINTS_THRESHOLD {
                 continue;
             }
-            screen_points.push(Pos2::new(
-                self.world_to_screen_x(*x),
-                self.world_to_screen_y(*y),
-            ));
+            screen_points.push(pos2(self.world_to_screen_x(*x), self.world_to_screen_y(*y)));
         }
         self.ui
             .painter()

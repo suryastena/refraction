@@ -2,20 +2,22 @@
 
 mod app;
 
-use egui::{Style, Vec2, Visuals, vec2};
+use egui::{Pos2, Style, Vec2, Visuals, pos2, vec2};
 
 use crate::app::RefractionApp;
 
 fn main() -> eframe::Result {
     env_logger::init();
 
-    const WINDOW_SIZE: Vec2 = vec2(1200.0, 800.0);
+    const WINDOW_POSITION: Pos2 = pos2(50.0, 50.0);
+    const WINDOW_SIZE: Vec2 = vec2(1500.0, 900.0);
     const MIN_WINDOW_SIZE: Vec2 = vec2(100.0, 100.0);
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(WINDOW_SIZE)
-            .with_min_inner_size(MIN_WINDOW_SIZE),
+            .with_min_inner_size(MIN_WINDOW_SIZE)
+            .with_position(WINDOW_POSITION),
 
         ..Default::default()
     };
