@@ -4,15 +4,13 @@ mod field;
 pub mod variables;
 
 use field::Field;
-use variables::{ELECTRON_DAMPING, ELECTRON_MASS, ELECTRON_SPACING, SPRING_CONSTANT, WORLD_SIZE};
+use variables::{
+    C, DIVISIONS, ELECTRON_DAMPING, ELECTRON_MASS, ELECTRON_SPACING, SPRING_CONSTANT, TIME_STEP,
+    WORLD_SIZE,
+};
 
 use egui::{Pos2, Rangef, pos2, vec2};
-/*
-=================================================================================
-*/
-pub const DIVISIONS: usize = 1001;
-pub const C: f32 = 1.0;
-pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
+
 /*
 =================================================================================
 */
@@ -25,7 +23,7 @@ pub enum Waveform {
 
 fn gaussian_wave(x: f32, t: f32) -> f32 {
     let xp = x + C * t - 4.0;
-    -0.5*(-(xp * xp)).exp()
+    -0.5 * (-(xp * xp)).exp()
 }
 
 fn gaussian_packet_wave(x: f32, t: f32) -> f32 {
@@ -91,13 +89,13 @@ impl Electron {
         }
     }
 
-    fn update_position(&mut self, applied_field_strength: f32, t: f32, delta_t: f32) {
+    fn update_position(&mut self, applied_field_strength: f32, t: f32) {
         let force = applied_field_strength
             - self.spring_constant * self.position.y
             - self.damping * self.velocity;
         self.acceleration = force / self.mass;
-        self.velocity += delta_t * self.acceleration;
-        self.position.y += delta_t * self.velocity;
+        self.velocity += TIME_STEP * self.acceleration;
+        self.position.y += TIME_STEP * self.velocity;
         self.history.push(self.snapshot(t));
     }
 
@@ -125,24 +123,19 @@ impl Electron {
         }
         let distance = (x - self.position.x).abs();
         let past_t = (t - distance / C).max(0.0);
-        let mut point = PointInTime {
+
+        let i = ((self.history.len() as f32) * past_t / t).floor() as usize;
+
+        let t1 = self.history.get(i).unwrap_or(&now);
+        let t2 = self.history.get(i + 1).unwrap_or(&now);
+
+        let interpolation_factor = (past_t - t1.t) / (t2.t - t1.t);
+        return PointInTime {
             t: past_t,
-            y: 0.0,
-            v: 0.0,
-            a: 0.0,
+            y: t1.y * (1.0 - interpolation_factor) + t2.y * interpolation_factor,
+            v: t1.v * (1.0 - interpolation_factor) + t2.v * interpolation_factor,
+            a: t1.a * (1.0 - interpolation_factor) + t2.a * interpolation_factor,
         };
-        for i in (0..self.history.len()).rev() {
-            let t1 = self.history.get(i).unwrap();
-            if t1.t < past_t {
-                let t2 = self.history.get(i + 1).unwrap_or(&now);
-                let interpolation_factor = (past_t - t1.t) / (t2.t - t1.t);
-                point.y = t1.y * (1.0 - interpolation_factor) + t2.y * interpolation_factor;
-                point.v = t1.v * (1.0 - interpolation_factor) + t2.v * interpolation_factor;
-                point.a = t1.a * (1.0 - interpolation_factor) + t2.a * interpolation_factor;
-                break;
-            }
-        }
-        return point;
     }
 }
 
@@ -153,7 +146,6 @@ impl Electron {
 pub struct Simulation {
     t: f32,
     size: Rangef,
-    pub speed: f32,
     pub waveform: Waveform,
     pub spring_constant: f32,
     pub electron_mass: f32,
@@ -170,7 +162,6 @@ impl Simulation {
         let size = WORLD_SIZE;
         Simulation {
             t: 0.0,
-            speed: 1.0,
             size,
             waveform,
             electron_count: 1,
@@ -223,19 +214,18 @@ impl Simulation {
         self.resultant_field
             .set_from_function(self.applied_wave(), self.t);
 
-        let time_step = self.time_step();
         for i in 0..self.electrons.len() {
             let e_y = self.resultant_field.value_at(self.electrons[i].position.x);
             let e = self.electrons.get_mut(i).unwrap();
             e.mass = self.electron_mass;
             e.spring_constant = self.spring_constant;
             e.damping = self.damping;
-            e.update_position(e_y, self.t, time_step);
+            e.update_position(e_y, self.t);
             e.update_induced_field(self.t);
             self.resultant_field.add(&e.field);
         }
 
-        self.t += time_step;
+        self.t += TIME_STEP;
 
         // terminate simulation after wave has cleared the screen
         //return self.t > (1.3 * self.size.span() / C);
@@ -252,10 +242,6 @@ impl Simulation {
             Waveform::GaussianPacket => gaussian_packet_wave,
             Waveform::PlaneWave => plane_wave,
         }
-    }
-
-    fn time_step(&self) -> f32 {
-        self.speed * TIME_STEP
     }
 
     pub fn electrons(&self) -> &[Electron] {

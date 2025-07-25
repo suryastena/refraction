@@ -6,6 +6,12 @@ pub struct Variable {
     pub max: f32,
 }
 
+pub const DIVISIONS: usize = 1001;
+
+pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
+
+pub const C: f32 = 1.0;
+
 pub const WORLD_SIZE: Rangef = Rangef {
     min: -20.0,
     max: 4.0,

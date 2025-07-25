@@ -2,7 +2,7 @@ use egui::Rangef;
 use ndarray::{Array, Array1, Ix1, s};
 use std::ops::{Index, IndexMut};
 
-use crate::app::simulation::DIVISIONS;
+use crate::app::simulation::variables::DIVISIONS;
 
 pub struct Field {
     field: Array1<f32>,

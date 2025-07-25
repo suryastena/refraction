@@ -40,6 +40,8 @@ fn resultant_field_colour(a: f32) -> Color32 {
 pub struct RefractionApp {
     simulation: Simulation,
     paused: bool,
+    speed: f32,
+    requested_frames: f32,
     frame: u32,
     zoom: f32,
     world_centre: f32,
@@ -63,6 +65,8 @@ impl RefractionApp {
             simulation,
             paused: true,
 
+            speed: 1.0,
+            requested_frames: 0.0,
             frame: 0,
             frame_skip: SIMULATION_FPS / 5,
             last_n_frames_start: SystemTime::now(),
@@ -92,13 +96,16 @@ impl eframe::App for RefractionApp {
         }
 
         if !self.paused && (self.frame % MONITOR_REFRESH_RATE / SIMULATION_FPS == 0) {
-            if self.simulation.update() {
-                // sim complete, reset
-                self.paused = true;
-                self.simulation.reset();
-                self.frame = 0;
+            self.requested_frames += self.speed;
+            while (self.frame as f32) < self.requested_frames {
+                if self.simulation.update() {
+                    // sim complete, reset
+                    self.paused = true;
+                    self.simulation.reset();
+                    self.frame = 0;
+                }
+                self.frame += 1;
             }
-            self.frame += 1;
         }
 
         let electron_count = self.simulation.electron_count;
@@ -248,9 +255,9 @@ impl eframe::App for RefractionApp {
                     ui.separator();
 
                     ui.label("Speed");
-                    ui.add(egui::Slider::new(&mut self.simulation.speed, 0.1..=10.0));
+                    ui.add(egui::Slider::new(&mut self.speed, 0.1..=10.0));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.speed = 1.0;
+                        self.speed = 1.0;
                     }
 
                     ui.separator();
