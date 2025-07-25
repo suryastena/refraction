@@ -9,6 +9,7 @@ use simulation::{Simulation, Waveform};
 
 use egui::{Color32, Rangef, Rect, Response, Sense, Style, pos2};
 use std::time::SystemTime;
+use strum::IntoEnumIterator;
 
 const MONITOR_REFRESH_RATE: u32 = 60;
 const SIMULATION_FPS: u32 = if MONITOR_REFRESH_RATE < 60 {
@@ -95,9 +96,13 @@ impl eframe::App for RefractionApp {
             self.last_n_frames_start = SystemTime::now();
         }
 
+        // advance simulation when not paused and with (hardcoded) vsync in order to not run sim faster than app can draw
         if !self.paused && (self.frame % MONITOR_REFRESH_RATE / SIMULATION_FPS == 0) {
+            // speed works by allowing a fractional number of requested frames per update.
+            // this means that when using a speed different to 1, each redraw may have a varying number of simulation updates.
             self.requested_frames += self.speed;
             while (self.frame as f32) < self.requested_frames {
+                // update sim until frame number satisfies requests
                 if self.simulation.update() {
                     // sim complete, reset
                     self.paused = true;
@@ -108,43 +113,40 @@ impl eframe::App for RefractionApp {
             }
         }
 
+        // recorded for checking if any change to these this redraw -
+        // only want to update sim when these values change as it's an expensive thing to do
         let electron_count = self.simulation.electron_count;
         let electron_spacing = self.simulation.electron_spacing;
 
-        // draws simulation controls at the bottom of the window
+        // draws simulation settings at the top of the window
         let settings = egui::TopBottomPanel::top("settings");
         let settings_drawn: Response = settings
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    // dropdown to select applied wave type
                     ui.label("Waveform:");
                     egui::ComboBox::from_id_salt("Wave")
                         .selected_text(format!("{:?}", &self.simulation.waveform))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.simulation.waveform,
-                                Waveform::GaussianPacket,
-                                format!("{:?}", Waveform::GaussianPacket),
-                            );
-                            ui.selectable_value(
-                                &mut self.simulation.waveform,
-                                Waveform::Gaussian,
-                                format!("{:?}", Waveform::Gaussian),
-                            );
-                            ui.selectable_value(
-                                &mut self.simulation.waveform,
-                                Waveform::PlaneWave,
-                                format!("{:?}", Waveform::PlaneWave),
-                            );
+                            for form in Waveform::iter() {
+                                ui.selectable_value(
+                                    &mut self.simulation.waveform,
+                                    form,
+                                    format!("{:?}", form),
+                                );
+                            }
                         });
 
                     ui.separator();
 
+                    // number of electons, allow only the amount that can appear onscreen at once
                     let max_e = self.simulation.max_electrons();
                     ui.label("Electrons:");
                     ui.add(
                         egui::DragValue::new(&mut self.simulation.electron_count).range(1..=max_e),
                     );
 
+                    // distance between each electron
                     ui.label("Spacing:");
                     ui.add(egui::Slider::new(
                         &mut self.simulation.electron_spacing,
@@ -156,6 +158,8 @@ impl eframe::App for RefractionApp {
                     }
 
                     ui.separator();
+
+                    // electron properties
 
                     ui.label("M").on_hover_text("Particle mass");
                     ui.add(egui::Slider::new(
@@ -191,7 +195,7 @@ impl eframe::App for RefractionApp {
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Opacities:");
+                    ui.label("Field opacities:");
                     ui.label(egui::RichText::new("◼").color(applied_field_colour(0.7)));
                     ui.add(egui::Slider::new(
                         &mut self.applied_field_opacity,
@@ -211,6 +215,7 @@ impl eframe::App for RefractionApp {
             })
             .response;
 
+        // draws simulation controls at the bottom of the window
         let controls = egui::TopBottomPanel::bottom("controls");
         let controls_drawn: Response = controls
             .show(ctx, |ui| {
@@ -238,6 +243,7 @@ impl eframe::App for RefractionApp {
                         self.simulation.reset();
                         self.frame = 0;
                     }
+                    // button for stepping the simulation by a configurable number of updates
                     if ui
                         .add_enabled(self.paused, egui::Button::new("⏭"))
                         .on_hover_text("Advance simulation by one step")
@@ -250,10 +256,11 @@ impl eframe::App for RefractionApp {
                         }
                     }
                     ui.add(egui::DragValue::new(&mut self.frame_skip))
-                        .on_hover_text("Number of frames to advance per step");
+                        .on_hover_text("Number of updates to advance per step");
 
                     ui.separator();
 
+                    // ratio of simulation UPS to screen FPS
                     ui.label("Speed");
                     ui.add(egui::Slider::new(&mut self.speed, 0.1..=10.0));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
@@ -262,7 +269,7 @@ impl eframe::App for RefractionApp {
 
                     ui.separator();
 
-                    ui.label("Zoom");
+                    ui.label("Zoom").on_hover_text("You can also zoom using the mouse wheel, and move around by dragging with the mouse.");
                     ui.add(egui::Slider::new(&mut self.zoom, 1.0..=10.0));
                     if ui.button("↺").on_hover_text("Reset view").clicked() {
                         self.zoom = 1.0;
@@ -278,80 +285,103 @@ impl eframe::App for RefractionApp {
             })
             .response;
 
+        // adds/removes/modifies electrons only if required
         let electron_count_changed = self.simulation.electron_count != electron_count;
         let electron_spacing_changed = self.simulation.electron_spacing != electron_spacing;
-
         if electron_count_changed || electron_spacing_changed {
             self.simulation.update_electrons(electron_spacing_changed);
         }
 
+        // the space on the screen in points between the settings/control bars
         let canvas_extent = Rect::from_two_pos(
             pos2(ctx.screen_rect().left(), settings_drawn.rect.bottom()),
             pos2(ctx.screen_rect().right(), controls_drawn.rect.top()),
         );
 
-        let pointer_pos = ctx.pointer_latest_pos().unwrap_or(pos2(0.0, 0.0));
+        // dimensions on the x axis of the amount of the simulation that is visible on-screen
         let mut visible_world = zoom_to(self.simulation.size(), self.zoom, self.world_centre);
-        let pointer_world_pos = ((pointer_pos.x - canvas_extent.left()) * visible_world.span()
+
+        // position of mouse pointer
+        let pointer_pos = ctx.pointer_latest_pos().unwrap_or(pos2(0.0, 0.0)); // in screen space (measured in points)
+        let pointer_world_pos = ((pointer_pos.x - canvas_extent.left()) * visible_world.span() // in world space (measured in simulation units)
             / canvas_extent.width())
             + visible_world.min;
 
+        // get the amount the user has scrolled the mouse wheel this frame
         let mut scroll_delta: f32 = 0.0;
         ctx.input(|input| {
             scroll_delta = input.smooth_scroll_delta.y;
         });
         if scroll_delta == 0.0 && self.zoom_centre.is_some() {
+            // no scrolling, stop remembering the centre we were zooming into
             self.zoom_centre = None;
         }
         if scroll_delta != 0.0 {
             if canvas_extent.contains(pointer_pos) {
+                // the dimensions of the visible part of the simulation after this frame's zoom is applied
                 let future_visible_world = zoom_to(
                     self.simulation.size(),
                     (self.zoom + scroll_delta / 100.0).max(1.0),
                     self.world_centre,
                 );
 
+                // If this is the first frame of a zoom action, remember the centre we are zooming on.
+                // This is because the mouse pointer will change where in world space it is located but we want to stay
+                // locked onto the same centre for the whole zoom action.
                 if self.zoom_centre.is_none() {
                     self.zoom_centre = Some(pointer_world_pos);
                 }
 
+                // if zoom centre is near the edges, clamp centre so no no part of the canvas is outside the simulation's bounds
                 self.world_centre = self
                     .zoom_centre
                     .unwrap()
                     .min(self.simulation.size().max - future_visible_world.span() / 2.0)
                     .max(self.simulation.size().min + future_visible_world.span() / 2.0);
 
+                // change zoom level based on scroll amount
                 self.zoom = (self.zoom + scroll_delta / 100.0).max(1.0);
             }
-        }
 
-        visible_world = zoom_to(self.simulation.size(), self.zoom, self.world_centre);
+            // apply new zoom
+            visible_world = zoom_to(self.simulation.size(), self.zoom, self.world_centre);
+        }
 
         // draws the simulation in the main panel of the window
         let style = Style::default();
         let _ = egui::CentralPanel::default()
             .frame(egui::Frame::canvas(&style))
             .show(ctx, |ui| {
+                // this class draws objects in screen space based on coordinates given in simulation (world) space
                 let canvas = Canvas::new(ui, canvas_extent, visible_world);
 
+                // detects user dragging canvas with the mouse and shifts visible world accordingly
                 if ui
                     .interact(canvas_extent, egui::Id::new("canvas-drag"), Sense::drag())
                     .dragged()
                 {
+                    // get shift in pointer based on remembered mouse position last frame
                     let diff = self.dragging.unwrap_or(pointer_pos.x) - pointer_pos.x;
+                    // Change world centre, changing from screen space diff to world space diff
+                    // This will apply on the next frame, due to necessary 1 frame delay to calculate initial mouse movement from start of dragging
                     self.world_centre += diff * visible_world.span() / canvas_extent.width();
+                    // clamp centre so no part of the canvas is outside simulation bounds
                     self.world_centre = self
                         .world_centre
                         .min(self.simulation.size().max - visible_world.span() / 2.0)
                         .max(self.simulation.size().min + visible_world.span() / 2.0);
+                    // remember pointer position for next frame
                     self.dragging = Some(pointer_pos.x);
                 } else {
+                    // drag ended, stop remembering mouse position
                     self.dragging = None;
                 }
 
+                // draw lines on the canvas
                 canvas.draw_grid_lines();
                 canvas.draw_axes();
 
+                // draw electrons and fields
                 for electron in self.simulation.electrons() {
                     canvas.draw_filled_circle(electron.position(), 0.25, electron_colour(1.0));
                     canvas.draw_points(
@@ -375,6 +405,7 @@ impl eframe::App for RefractionApp {
             })
             .response;
 
+        // immediately redraw so simulation is constantly updated as fast as monitor refresh
         ctx.request_repaint();
     }
 }
