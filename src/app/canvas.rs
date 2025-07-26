@@ -32,7 +32,7 @@ impl<'a> Canvas<'a> {
 
     fn world_to_screen_pos(&self, pos: &Pos2) -> Pos2 {
         // convert vector from simulation coords to screen pixel location
-        self.screen_extent.min + self.scale * (*pos - self.range.min)
+        self.screen_extent.min + self.scale * (pos2(pos.x, -pos.y) - self.range.min)
     }
 
     fn world_to_screen_x(&self, x: f32) -> f32 {

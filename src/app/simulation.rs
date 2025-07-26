@@ -5,8 +5,8 @@ pub mod variables;
 
 use field::Field;
 use variables::{
-    C, DIVISIONS, ELECTRON_DAMPING, ELECTRON_MASS, ELECTRON_SPACING, SPRING_CONSTANT, TIME_STEP,
-    WORLD_SIZE,
+    C, DIVISIONS, ELECTRON_DAMPING, ELECTRON_MASS, ELECTRON_SPACING, INV_C_2, SPRING_CONSTANT,
+    TIME_STEP, WORLD_SIZE,
 };
 
 use egui::{Pos2, Rangef, pos2, vec2};
@@ -99,18 +99,16 @@ impl Electron {
             let mod_r = r.length();
             // get perpendicular components of motion
             let cos_theta = r.x.abs() / mod_r;
-            let v = e_rva.v * cos_theta;
-            let a = e_rva.a * cos_theta;
-            let r_dot_v = r.y * v;
+            let a_perp = e_rva.a * cos_theta;
 
-            // prevent big spikes in field close to the electron, it looks bad and makes it hard to understand what's going on
+            // prevent big spikes in field close to the electron, this factor isn't physical but spikes make it look bad and makes it hard to understand what's going on.
             let w = 2.0 * mod_r;
             let pretty_factor = 1.0 / (1.0 / (w * w * w.exp()) + 1.0);
 
             // derived from second time-derivative term of Heaviside-Feynman formula
             self.field[i] = match r.x.abs() < self.field.size() / (DIVISIONS - 1) as f32 {
                 true => 0.0,
-                false => pretty_factor * (v * r_dot_v / (mod_r * mod_r) - a / mod_r),
+                false => pretty_factor * INV_C_2 * (-a_perp / mod_r),
             };
         }
     }

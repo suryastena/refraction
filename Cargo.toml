@@ -1,9 +1,9 @@
 [package]
 name = "refraction"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["Rowan Preston <rowan.t.preston@gmail.com>"]
-include = ["LICENSE", "Cargo.toml", "README.md", "src/*.rs"]
+include = ["LICENSE", "Cargo.toml", "README.md", "src/*.rs", "resource/*.png"]
 
 [dependencies]
 eframe = "0.31"

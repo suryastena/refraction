@@ -7,12 +7,13 @@ pub struct Variable {
     pub max: f32,
 }
 
-// number of x axis points to calculate the field for. Should be an odd number.
-pub const DIVISIONS: usize = 1001;
+// number of x axis points to calculate the field for
+pub const DIVISIONS: usize = 1000;
 // amount internal simulation time increments by each update
 pub const TIME_STEP: f32 = 1.0 / (crate::app::SIMULATION_FPS as f32);
 // speed of light
 pub const C: f32 = 1.0;
+pub const INV_C_2: f32 = 1.0 / (C * C);
 
 // size of simulation
 pub const WORLD_SIZE: Rangef = Rangef {
@@ -44,7 +45,6 @@ pub const ELECTRON_SPACING: Variable = Variable {
     max: 8.0,
 };
 
-sa::const_assert!(DIVISIONS % 2 == 1);
 sa::const_assert!(WORLD_SIZE.min < WORLD_SIZE.max);
 sa::const_assert!(SPRING_CONSTANT.min < SPRING_CONSTANT.max);
 sa::const_assert!(ELECTRON_MASS.min < ELECTRON_MASS.max);
