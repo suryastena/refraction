@@ -41,8 +41,9 @@ impl<'a> Canvas<'a> {
     }
 
     fn world_to_screen_y(&self, y: f32) -> f32 {
-        // convert simulation y coord to screen pixel location
-        self.screen_extent.min.y + self.scale.y * (y - self.range.min.y)
+        // convert simulation y coord to screen pixel location.
+        // note: -y because the screen origin is the top left.
+        self.screen_extent.min.y + self.scale.y * (-y - self.range.min.y)
     }
 
     fn world_to_screen_scale(&self) -> f32 {
@@ -118,6 +119,6 @@ impl<'a> Canvas<'a> {
         }
         self.ui
             .painter()
-            .line(screen_points, Stroke::new(2.0, *colour));
+            .line(screen_points, Stroke::new(2.5, *colour));
     }
 }

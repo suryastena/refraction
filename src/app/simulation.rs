@@ -36,15 +36,15 @@ fn applied_wave(form: Waveform) -> fn(f32, f32) -> f32 {
 // definitions for waveforms
 fn gaussian_wave(x: f32, t: f32) -> f32 {
     let xp = x + C * t - WORLD_SIZE.max;
-    -0.5 * (-(xp * xp)).exp()
+    (-4.0 * xp * xp).exp()
 }
 fn gaussian_packet_wave(x: f32, t: f32) -> f32 {
     let xp = x + C * t - WORLD_SIZE.max;
-    (-(xp * xp)).exp() * (5.0 * xp).sin()
+    (-xp * xp).exp() * (5.0 * xp).sin()
 }
 fn plane_wave(x: f32, t: f32) -> f32 {
     let xp = x + C * t - WORLD_SIZE.max;
-    (8.0 * xp).sin()
+    (1.0 * xp).sin()
 }
 
 /*
@@ -72,9 +72,9 @@ pub struct Electron {
 impl Electron {
     pub fn new(position: Pos2, field_size: Rangef) -> Self {
         Electron {
-            mass: ELECTRON_MASS.default,
-            spring_constant: SPRING_CONSTANT.default,
-            damping: ELECTRON_DAMPING.default,
+            mass: ELECTRON_MASS.initial,
+            spring_constant: SPRING_CONSTANT.initial,
+            damping: ELECTRON_DAMPING.initial,
             position,
             velocity: 0.0,
             acceleration: 0.0,
@@ -97,14 +97,20 @@ impl Electron {
 
             let r = vec2(self.position.x - x, e_rva.y);
             let mod_r = r.length();
-            let v = e_rva.v;
-            let a = e_rva.a;
+            // get perpendicular components of motion
+            let cos_theta = r.x.abs() / mod_r;
+            let v = e_rva.v * cos_theta;
+            let a = e_rva.a * cos_theta;
             let r_dot_v = r.y * v;
+
+            // prevent big spikes in field close to the electron, it looks bad and makes it hard to understand what's going on
+            let w = 2.0 * mod_r;
+            let pretty_factor = 1.0 / (1.0 / (w * w * w.exp()) + 1.0);
 
             // derived from second time-derivative term of Heaviside-Feynman formula
             self.field[i] = match r.x.abs() < self.field.size() / (DIVISIONS - 1) as f32 {
                 true => 0.0,
-                false => v * r_dot_v / (mod_r * mod_r) - a / mod_r,
+                false => pretty_factor * (v * r_dot_v / (mod_r * mod_r) - a / mod_r),
             };
         }
     }
@@ -196,10 +202,10 @@ impl Simulation {
             size,
             waveform,
             electron_count: 1,
-            damping: ELECTRON_DAMPING.default,
-            spring_constant: SPRING_CONSTANT.default,
-            electron_mass: ELECTRON_MASS.default,
-            electron_spacing: ELECTRON_SPACING.default,
+            damping: ELECTRON_DAMPING.initial,
+            spring_constant: SPRING_CONSTANT.initial,
+            electron_mass: ELECTRON_MASS.initial,
+            electron_spacing: ELECTRON_SPACING.initial,
             applied_field: Field::new(size),
             resultant_field: Field::new(size),
             electrons: vec![Electron::new(pos2(0.0, 0.0), size)],
@@ -264,8 +270,8 @@ impl Simulation {
 
         self.t += TIME_STEP;
 
-        // terminate simulation after wave has cleared the screen
-        //return self.t > (1.3 * self.size.span() / C);
+        // returning true indiates the end and stops the simulation.
+        //return self.t > (1.3 * self.size.span() / C); // terminate simulation after wave has cleared the screen
         return false;
     }
 

@@ -67,8 +67,8 @@ impl RefractionApp {
             paused: true,
 
             speed: 1.0,
-            requested_frames: 0.0,
-            frame: 0,
+            requested_frames: 1.0,
+            frame: 1,
             frame_skip: SIMULATION_FPS / 5,
             last_n_frames_start: SystemTime::now(),
             last_n_frames_time_micros: 1e6,
@@ -108,6 +108,7 @@ impl eframe::App for RefractionApp {
                     self.paused = true;
                     self.simulation.reset();
                     self.frame = 0;
+                    self.requested_frames = 0.0;
                 }
                 self.frame += 1;
             }
@@ -154,7 +155,7 @@ impl eframe::App for RefractionApp {
                     ));
                     if ui.button("↺").on_hover_text("Reset electrons").clicked() {
                         self.simulation.electron_count = 1;
-                        self.simulation.electron_spacing = ELECTRON_SPACING.default;
+                        self.simulation.electron_spacing = ELECTRON_SPACING.initial;
                     }
 
                     ui.separator();
@@ -167,7 +168,7 @@ impl eframe::App for RefractionApp {
                         ELECTRON_MASS.min..=ELECTRON_MASS.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.electron_mass = ELECTRON_MASS.default;
+                        self.simulation.electron_mass = ELECTRON_MASS.initial;
                     }
 
                     ui.separator();
@@ -178,7 +179,7 @@ impl eframe::App for RefractionApp {
                         SPRING_CONSTANT.min..=SPRING_CONSTANT.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.spring_constant = SPRING_CONSTANT.default;
+                        self.simulation.spring_constant = SPRING_CONSTANT.initial;
                     }
 
                     ui.separator();
@@ -190,23 +191,26 @@ impl eframe::App for RefractionApp {
                         ELECTRON_DAMPING.min..=ELECTRON_DAMPING.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.damping = ELECTRON_DAMPING.default;
+                        self.simulation.damping = ELECTRON_DAMPING.initial;
                     }
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Field opacities:");
-                    ui.label(egui::RichText::new("◼").color(applied_field_colour(0.7)));
+                    ui.label(egui::RichText::new("◼").color(applied_field_colour(0.7)))
+                        .on_hover_text("Initial electric field");
                     ui.add(egui::Slider::new(
                         &mut self.applied_field_opacity,
                         0.0..=1.0,
                     ));
-                    ui.label(egui::RichText::new("◼").color(resultant_field_colour(0.7)));
+                    ui.label(egui::RichText::new("◼").color(resultant_field_colour(0.7)))
+                        .on_hover_text("Resultant electric field");
                     ui.add(egui::Slider::new(
                         &mut self.resultant_field_opacity,
                         0.0..=1.0,
                     ));
-                    ui.label(egui::RichText::new("◼").color(electron_field_colour(0.7)));
+                    ui.label(egui::RichText::new("◼").color(electron_field_colour(0.7)))
+                        .on_hover_text("Induced electric field of particles");
                     ui.add(egui::Slider::new(
                         &mut self.electron_field_opacity,
                         0.0..=1.0,
@@ -220,33 +224,18 @@ impl eframe::App for RefractionApp {
         let controls_drawn: Response = controls
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+
                     if ui
-                        .add_enabled(self.paused, egui::Button::new("▶"))
-                        .on_hover_text("Play simulation")
+                        .add( egui::Button::new(if self.paused {"▶"} else {"⏸"}))
+                        .on_hover_text(if self.paused {"Play simulation"} else {"Pause simulation"})
                         .clicked()
                     {
-                        self.paused = false;
-                    }
-                    if ui
-                        .add_enabled(!self.paused, egui::Button::new("⏸"))
-                        .on_hover_text("Pause simulation")
-                        .clicked()
-                    {
-                        self.paused = true;
-                    }
-                    if ui
-                        .add_enabled(self.simulation.time() > 0.0, egui::Button::new("⟲"))
-                        .on_hover_text("Restart simulation")
-                        .clicked()
-                    {
-                        self.paused = true;
-                        self.simulation.reset();
-                        self.frame = 0;
+                        self.paused = !self.paused;
                     }
                     // button for stepping the simulation by a configurable number of updates
                     if ui
                         .add_enabled(self.paused, egui::Button::new("⏭"))
-                        .on_hover_text("Advance simulation by one step")
+                        .on_hover_text("Advance simulation by a number of frames")
                         .clicked()
                     {
                         if self.paused {
@@ -257,6 +246,19 @@ impl eframe::App for RefractionApp {
                     }
                     ui.add(egui::DragValue::new(&mut self.frame_skip))
                         .on_hover_text("Number of updates to advance per step");
+
+                    ui.label(format!("{0:.2}s @ {1}", self.simulation.time(), self.frame)).on_hover_text("[Elapsed time]s @ [number of frames]");
+
+                    if ui
+                        .add_enabled(self.simulation.time() > 0.0, egui::Button::new("⟲"))
+                        .on_hover_text("Restart simulation")
+                        .clicked()
+                    {
+                        self.paused = true;
+                        self.frame = 0;
+                        self.requested_frames = 0.0;
+                        self.simulation.reset();
+                    }
 
                     ui.separator();
 

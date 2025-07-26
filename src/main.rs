@@ -1,10 +1,9 @@
 //! Initialises the application
 
 mod app;
+use crate::app::RefractionApp;
 
 use egui::{Pos2, Style, Vec2, Visuals, pos2, vec2};
-
-use crate::app::RefractionApp;
 
 fn main() -> eframe::Result {
     env_logger::init();
@@ -18,7 +17,6 @@ fn main() -> eframe::Result {
             .with_inner_size(WINDOW_SIZE)
             .with_min_inner_size(MIN_WINDOW_SIZE)
             .with_position(WINDOW_POSITION),
-
         ..Default::default()
     };
 
