@@ -4,12 +4,15 @@ mod canvas;
 mod simulation;
 
 use canvas::Canvas;
-use simulation::variables::{ELECTRON_DAMPING, ELECTRON_MASS, ELECTRON_SPACING, SPRING_CONSTANT};
+use simulation::particle::ChargedParticleType;
+use simulation::variables::{ELECTRON_DAMPING, ELECTRON_MASS, PARTICLE_SPACING, SPRING_CONSTANT};
 use simulation::{Simulation, Waveform};
 
 use egui::{Color32, Rangef, Rect, Response, Sense, Style, pos2};
 use std::time::SystemTime;
 use strum::IntoEnumIterator;
+
+use crate::app::simulation::ChargedParticle;
 
 const MONITOR_REFRESH_RATE: u32 = 60;
 const SIMULATION_FPS: u32 = if MONITOR_REFRESH_RATE < 60 {
@@ -25,10 +28,11 @@ fn zoom_to(range: &Rangef, zoom: f32, centre: f32) -> Rangef {
     }
 }
 
-fn electron_colour(a: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(255, 175, 0, (a * a * 255.0) as u8)
+fn particle_colour(a: f32, particle: &ChargedParticle) -> Color32 {
+    let (r, g, b) = particle.particle_type().colour();
+    Color32::from_rgba_unmultiplied(r, g, b, (a * a * 255.0) as u8)
 }
-fn electron_field_colour(a: f32) -> Color32 {
+fn particle_field_colour(a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(20, 100, 255, (a * a * 255.0) as u8)
 }
 fn applied_field_colour(a: f32) -> Color32 {
@@ -54,7 +58,7 @@ pub struct RefractionApp {
 
     applied_field_opacity: f32,
     resultant_field_opacity: f32,
-    electron_field_opacity: f32,
+    particle_field_opacity: f32,
 }
 
 impl RefractionApp {
@@ -80,7 +84,7 @@ impl RefractionApp {
 
             applied_field_opacity: 0.8,
             resultant_field_opacity: 0.7,
-            electron_field_opacity: 0.2,
+            particle_field_opacity: 0.2,
         }
     }
 }
@@ -116,8 +120,8 @@ impl eframe::App for RefractionApp {
 
         // recorded for checking if any change to these this redraw -
         // only want to update sim when these values change as it's an expensive thing to do
-        let electron_count = self.simulation.electron_count;
-        let electron_spacing = self.simulation.electron_spacing;
+        let particle_count = self.simulation.particle_count;
+        let particle_spacing = self.simulation.particle_spacing;
 
         // draws simulation settings at the top of the window
         let settings = egui::TopBottomPanel::top("settings");
@@ -140,35 +144,55 @@ impl eframe::App for RefractionApp {
 
                     ui.separator();
 
-                    // number of electons, allow only the amount that can appear onscreen at once
-                    let max_e = self.simulation.max_electrons();
-                    ui.label("Electrons:");
+                    // number of particles, allow only the amount that can appear onscreen at once
+                    let max_p = self.simulation.max_particles();
+                    ui.label("Particles:");
                     ui.add(
-                        egui::DragValue::new(&mut self.simulation.electron_count).range(1..=max_e),
+                        egui::DragValue::new(&mut self.simulation.particle_count).range(1..=max_p),
                     );
 
-                    // distance between each electron
+                    // distance between each particle
                     ui.label("Spacing:");
                     ui.add(egui::Slider::new(
-                        &mut self.simulation.electron_spacing,
-                        ELECTRON_SPACING.min..=ELECTRON_SPACING.max,
+                        &mut self.simulation.particle_spacing,
+                        PARTICLE_SPACING.min..=PARTICLE_SPACING.max,
                     ));
-                    if ui.button("↺").on_hover_text("Reset electrons").clicked() {
-                        self.simulation.electron_count = 1;
-                        self.simulation.electron_spacing = ELECTRON_SPACING.initial;
+                    if ui.button("↺").on_hover_text("Reset particles").clicked() {
+                        self.simulation.particle_count = 1;
+                        self.simulation.particle_spacing = PARTICLE_SPACING.initial;
                     }
 
                     ui.separator();
 
-                    // electron properties
+                    // particle type selection
+                    ui.label("Particle Type:");
+                    let current_type = self.simulation.particle_type;
+                    let mut selected_type = current_type;
+                    egui::ComboBox::from_id_salt("ParticleType")
+                        .selected_text(current_type.name())
+                        .show_ui(ui, |ui| {
+                            for form in ChargedParticleType::iter() {
+                                ui.selectable_value(
+                                    &mut selected_type,
+                                    form,
+                                    format!("{:?}", form),
+                                );
+                            }
+                        });
+                    if selected_type != current_type {
+                        self.simulation.set_particle_type(selected_type);
+                    }
 
+                    ui.separator();
+
+                    // particle properties
                     ui.label("M").on_hover_text("Particle mass");
                     ui.add(egui::Slider::new(
-                        &mut self.simulation.electron_mass,
+                        &mut self.simulation.particle_mass,
                         ELECTRON_MASS.min..=ELECTRON_MASS.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.electron_mass = ELECTRON_MASS.initial;
+                        self.simulation.particle_mass = self.simulation.particle_type.mass();
                     }
 
                     ui.separator();
@@ -179,19 +203,20 @@ impl eframe::App for RefractionApp {
                         SPRING_CONSTANT.min..=SPRING_CONSTANT.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.spring_constant = SPRING_CONSTANT.initial;
+                        self.simulation.spring_constant =
+                            self.simulation.particle_type.default_spring_constant();
                     }
 
                     ui.separator();
 
                     ui.label("Damping")
-                        .on_hover_text("Electron motion damping factor");
+                        .on_hover_text("Particle motion damping factor");
                     ui.add(egui::Slider::new(
                         &mut self.simulation.damping,
                         ELECTRON_DAMPING.min..=ELECTRON_DAMPING.max,
                     ));
                     if ui.button("↺").on_hover_text("Reset").clicked() {
-                        self.simulation.damping = ELECTRON_DAMPING.initial;
+                        self.simulation.damping = self.simulation.particle_type.default_damping();
                     }
                 });
 
@@ -209,10 +234,10 @@ impl eframe::App for RefractionApp {
                         &mut self.resultant_field_opacity,
                         0.0..=1.0,
                     ));
-                    ui.label(egui::RichText::new("◼").color(electron_field_colour(0.7)))
+                    ui.label(egui::RichText::new("◼").color(particle_field_colour(0.7)))
                         .on_hover_text("Induced electric field of particles");
                     ui.add(egui::Slider::new(
-                        &mut self.electron_field_opacity,
+                        &mut self.particle_field_opacity,
                         0.0..=1.0,
                     ));
                 });
@@ -287,11 +312,11 @@ impl eframe::App for RefractionApp {
             })
             .response;
 
-        // adds/removes/modifies electrons only if required
-        let electron_count_changed = self.simulation.electron_count != electron_count;
-        let electron_spacing_changed = self.simulation.electron_spacing != electron_spacing;
-        if electron_count_changed || electron_spacing_changed {
-            self.simulation.update_electrons(electron_spacing_changed);
+        // adds/removes/modifies particles only if required
+        let particle_count_changed = self.simulation.particle_count != particle_count;
+        let particle_spacing_changed = self.simulation.particle_spacing != particle_spacing;
+        if particle_count_changed || particle_spacing_changed {
+            self.simulation.update_particles(particle_spacing_changed);
         }
 
         // the space on the screen in points between the settings/control bars
@@ -383,13 +408,17 @@ impl eframe::App for RefractionApp {
                 canvas.draw_grid_lines();
                 canvas.draw_axes();
 
-                // draw electrons and fields
-                for electron in self.simulation.electrons() {
-                    canvas.draw_filled_circle(electron.position(), 0.25, electron_colour(1.0));
+                // draw particles and fields
+                for particle in self.simulation.particles() {
+                    canvas.draw_filled_circle(
+                        particle.position(),
+                        0.25,
+                        particle_colour(1.0, particle),
+                    );
                     canvas.draw_points(
                         self.simulation.x_intervals(),
-                        electron.field(),
-                        &electron_field_colour(self.electron_field_opacity),
+                        particle.field(),
+                        &particle_field_colour(self.particle_field_opacity),
                     );
                 }
 

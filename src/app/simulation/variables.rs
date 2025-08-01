@@ -39,7 +39,7 @@ pub const ELECTRON_DAMPING: Variable = Variable {
     max: 1.0,
 };
 // distance between neighbouring electrons
-pub const ELECTRON_SPACING: Variable = Variable {
+pub const PARTICLE_SPACING: Variable = Variable {
     initial: 3.0,
     min: 1.0,
     max: 8.0,
@@ -49,6 +49,6 @@ sa::const_assert!(WORLD_SIZE.min < WORLD_SIZE.max);
 sa::const_assert!(SPRING_CONSTANT.min < SPRING_CONSTANT.max);
 sa::const_assert!(ELECTRON_MASS.min < ELECTRON_MASS.max);
 sa::const_assert!(ELECTRON_DAMPING.min < ELECTRON_DAMPING.max);
-sa::const_assert!(ELECTRON_SPACING.min < ELECTRON_SPACING.max);
+sa::const_assert!(PARTICLE_SPACING.min < PARTICLE_SPACING.max);
 sa::const_assert!(TIME_STEP > 0.0);
 sa::const_assert!(C > 0.0);
