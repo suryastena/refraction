@@ -6,7 +6,7 @@ mod simulation;
 use canvas::Canvas;
 use simulation::particle::ChargedParticleType;
 use simulation::variables::{ELECTRON_DAMPING, ELECTRON_MASS, PARTICLE_SPACING, SPRING_CONSTANT};
-use simulation::{Simulation, Waveform};
+use simulation::{Simulation, waveform::*};
 
 use egui::{Color32, Rangef, Rect, Response, Sense, Style, pos2};
 use std::time::SystemTime;
@@ -35,8 +35,9 @@ fn particle_colour(a: f32, particle: &ChargedParticle) -> Color32 {
 fn particle_field_colour(a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(20, 100, 255, (a * a * 255.0) as u8)
 }
-fn applied_field_colour(a: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(255, 50, 50, (a * a * 255.0) as u8)
+fn applied_field_colour(a: f32, waveform: &Waveform) -> Color32 {
+    let (r, g, b) = waveform.properties().colour;
+    Color32::from_rgba_unmultiplied(r, g, b, (a * a * 255.0) as u8)
 }
 fn resultant_field_colour(a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(180, 20, 180, (a * a * 255.0) as u8)
@@ -137,7 +138,7 @@ impl eframe::App for RefractionApp {
                                 ui.selectable_value(
                                     &mut self.simulation.waveform,
                                     form,
-                                    format!("{:?}", form),
+                                    format!("{}", form.properties().name),
                                 );
                             }
                         });
@@ -175,7 +176,7 @@ impl eframe::App for RefractionApp {
                                 ui.selectable_value(
                                     &mut selected_type,
                                     form,
-                                    format!("{:?}", form),
+                                    format!("{}", form.properties().name),
                                 );
                             }
                         });
@@ -222,8 +223,11 @@ impl eframe::App for RefractionApp {
 
                 ui.horizontal(|ui| {
                     ui.label("Field opacities:");
-                    ui.label(egui::RichText::new("◼").color(applied_field_colour(0.7)))
-                        .on_hover_text("Initial electric field");
+                    ui.label(
+                        egui::RichText::new("◼")
+                            .color(applied_field_colour(0.7, &self.simulation.waveform)),
+                    )
+                    .on_hover_text("Initial electric field");
                     ui.add(egui::Slider::new(
                         &mut self.applied_field_opacity,
                         0.0..=1.0,
@@ -425,7 +429,7 @@ impl eframe::App for RefractionApp {
                 canvas.draw_points(
                     self.simulation.x_intervals(),
                     self.simulation.applied_field(),
-                    &applied_field_colour(self.applied_field_opacity),
+                    &applied_field_colour(self.applied_field_opacity, &self.simulation.waveform),
                 );
 
                 canvas.draw_points(

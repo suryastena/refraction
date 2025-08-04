@@ -3,48 +3,14 @@
 mod field;
 pub mod particle;
 pub mod variables;
+pub mod waveform;
 
 use field::Field;
 use particle::ChargedParticleType;
 use variables::{C, DIVISIONS, INV_C_2, PARTICLE_SPACING, TIME_STEP, WORLD_SIZE};
+use waveform::*;
 
 use egui::{Pos2, Rangef, pos2, vec2};
-use strum_macros::EnumIter;
-
-/*
-== Possible forms for the applied wave ========================================
-*/
-
-// Dropdown in the UI will be automatically populated with these options
-#[derive(Debug, PartialEq, Clone, Copy, EnumIter)]
-pub enum Waveform {
-    Gaussian,       // single gaussian pulse
-    GaussianPacket, // sine wave modulated by gaussian
-    PlaneWave,      // sine wave
-}
-
-// mapping between enumeration and function definitions
-fn applied_wave(form: Waveform) -> fn(f32, f32) -> f32 {
-    match form {
-        Waveform::Gaussian => gaussian_wave,
-        Waveform::GaussianPacket => gaussian_packet_wave,
-        Waveform::PlaneWave => plane_wave,
-    }
-}
-
-// definitions for waveforms
-fn gaussian_wave(x: f32, t: f32) -> f32 {
-    let xp = x + C * t - WORLD_SIZE.max;
-    (-4.0 * xp * xp).exp()
-}
-fn gaussian_packet_wave(x: f32, t: f32) -> f32 {
-    let xp = x + C * t - WORLD_SIZE.max;
-    (-xp * xp).exp() * (5.0 * xp).sin()
-}
-fn plane_wave(x: f32, t: f32) -> f32 {
-    let xp = x + C * t - WORLD_SIZE.max;
-    (1.0 * xp).sin()
-}
 
 /*
 == Logic relating to the particles =========================================================
@@ -266,9 +232,9 @@ impl Simulation {
     pub fn update(&mut self) -> bool {
         // set applied and resultant fields from waveform
         self.applied_field
-            .set_from_function(applied_wave(self.waveform), self.t);
+            .set_from_function(self.waveform.properties().function, self.t);
         self.resultant_field
-            .set_from_function(applied_wave(self.waveform), self.t);
+            .set_from_function(self.waveform.properties().function, self.t);
 
         for i in 0..self.particles.len() {
             let e_y = self.resultant_field.value_at(self.particles[i].position.x);
